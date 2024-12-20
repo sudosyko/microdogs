@@ -1,0 +1,10 @@
+---
+odoo_values:
+  replicaCount: 1
+  postgresql:
+    enabled: true
+  externalDatabase:
+    enabled: false
+  odooUsername: admin
+  odooPassword: admin123
+  odooEmail: admin@example.com

@@ -1,0 +1,15 @@
+---
+- name: Ensure namespace exists
+  community.kubernetes.k8s:
+    api_version: v1
+    kind: Namespace
+    name: "{{ item.microk8s_namespace }}"
+  with_items: "{{ odoo_deployments }}"
+
+- name: Deploy Odoo Helm chart
+  community.kubernetes.helm:
+    name: "{{ item.helm_release_name }}"
+    chart_ref: "{{ item.odoo_chart }}"
+    release_namespace: "{{ item.microk8s_namespace }}"
+    values: "{{ item.odoo_values }}"
+  with_items: "{{ odoo_deployments }}"

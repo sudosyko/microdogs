@@ -1,0 +1,7 @@
+---
+- name: Deploy Odoo with Helm
+  hosts: k8s-vm
+  tasks:
+    - name: Include Helm deploy role
+      include_role:
+        name: helm-deploy
