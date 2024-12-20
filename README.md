@@ -1,6 +1,28 @@
-# Tutorial: Einrichtung der VM und Ausführung des Ansible Playbooks
+# Dokumentation: Einrichtung der VM und Ausführung des Ansible Playbooks
 
 ----
+## Ordnerstruktur
+```css
+odoo-ansible-demo/
+├── ansible/
+│   ├── group_vars/
+│   │   └── all.yml
+│   ├── roles/
+│   │   ├── helm-deploy/
+│   │   │   ├── tasks/
+│   │   │   │   ├── main.yml
+│   │   │   ├── templates/
+│   │   │   │   └── values.j2
+│   │   │   ├── defaults/
+│   │   │   │   └── main.yml
+│   ├── playbooks/
+│   │   └── deploy-odoo.yml
+│   ├── inventory/
+│   │   └── hosts.yml
+│   └── ansible.cfg
+├── README.md
+```
+
 ## Voraussetzungen
 1. Eine Ubuntu VM auf UTM ist bereits installiert.
 2. MicroK8s ist installiert, aber noch nicht konfiguriert.
@@ -42,17 +64,37 @@ microk8s helm3 repo add bitnami https://charts.bitnami.com/bitnami
 microk8s helm3 repo update
 ```
 
-### 1.3 SSH-Zugriff einrichten
+### 1.3 Python-Umgebung einrichten
+Das Ansible-Community-Modul für Kubernetes benötigt Python-Bibliotheken. Installiere diese auf der VM:
+```bash
+# Pip installieren (falls nicht vorhanden)
+sudo apt update
+sudo apt install -y python3-pip python3-pyyaml python3-requests
+
+# Kubernetes-Modul installieren
+pip3 install kubernetes --break-system-packages
+
+# Installation überprüfen
+python3 -c "import kubernetes; print(kubernetes.__version__)"
+```
+
+### 1.4 SSH-Zugriff einrichten
 Damit Ansible auf die VM zugreifen kann:
 ```bash
 # SSH-Schlüssel generieren (falls noch nicht vorhanden)
 ssh-keygen -t rsa -b 2048 -f ~/.ssh/id_rsa -N ""
 
+# Zeile Anpassen auf VM /etc/ssh/sshd_config
+PubkeyAuthentication yes
+
 # Öffentlichen Schlüssel zur VM hinzufügen
-ssh-copy-id user@<vm-ip>
+scp /path/to/id_rsa.pub user@<vm-ip>:~/.ssh
+
+# Schlüssel auf VM zu authoized keys hinzufügen
+  cat ~/.ssh/id_rsa.pub >> authorized_keys
 
 # Verbindung testen
-ssh user@<vm-ip>
+ssh -i /path/to/id_rsa user@<vm-ip>
 ```
 
 ---
@@ -103,12 +145,79 @@ http://<vm-ip>:<nodeport>
 ## Schritt 3: Skalierung und Erweiterung
 
 ### 3.1 Weitere Deployments hinzufügen
-- Bearbeite die Datei `group_vars/all.yml`, um neue Deployments zu definieren.
-- Passe die Helm-Werte in der Datei `templates/values.yaml.j2` an, falls notwendig.
+- Bearbeite die Datei `inventory/hosts.yml`, um neue Deployments zu definieren in dem du die liste `odoo_deployments` ergänzts.
+- Passe die Helm-Werte in der Datei `templates/values.j2` an, falls notwendig.
 
 ### 3.2 Deployment skalieren
 Führe den folgenden Befehl aus, um die Anzahl der Pods zu erhöhen:
 ```bash
 microk8s kubectl scale deployment odoo --replicas=3 -n odoo
 ```
+
+## Allgemeines Kubernetes Handling
+
+### Alias für microk8s Kommando
+Da es nervig ist jedes mal `sudo microk8s` vor jedem kubectl Befehl einzugeben kannst du folgenden alias erstellen:
+```bash
+# Füge einen Alias hinzu, damit microk8s kubectl als kubectl ausgeführt wird.
+echo 'alias kubectl="microk8s kubectl"' >> ~/.bashrc
+# Lade die Konfiguration neu:
+source ~/.bashrc
+```
+
+### Ressourcen löschen
+Wenn du Deployments, StatefulSets oder andere Ressourcen entfernen möchtest, kannst du die folgenden Befehle verwenden:
+
+#### a) Einzelne Deployments löschen
+```bash
+kubectl delete deployment <deployment-name> -n <namespace>
+```
+**Beispiel:**
+```bash
+kubectl delete deployment odoo1 -n default
+```
+
+#### b) StatefulSets löschen
+```bash
+kubectl delete statefulset <statefulset-name> -n <namespace>
+```
+**Beispiel:**
+```bash
+kubectl delete statefulset odoo-postgresql -n odoo2
+```
+
+#### c) Services löschen
+```bash
+kubectl delete service <service-name> -n <namespace>
+```
+**Beispiel:**
+```bash
+kubectl delete service odoo-postgresql-hl -n default
+```
+
+#### d) Namespace löschen
+Falls ein Namespace nicht mehr benötigt wird, kannst du ihn komplett löschen. Dies entfernt alle Ressourcen darin:
+```bash
+kubectl delete namespace <namespace>
+```
+**Beispiel:**
+```bash
+kubectl delete namespace odoo2
+```
+
+### Überprüfung von Ressourcen
+- Liste alle Ressourcen in einem Namespace auf:
+  ```bash
+  kubectl get all -n <namespace>
+  ```
+
+- Prüfe alle Ressourcen über alle Namespaces hinweg:
+  ```bash
+  kubectl get all -A
+  ```
+
+- Suche nach spezifischen Ressourcen (z. B. "odoo"):
+  ```bash
+  kubectl get all -A | grep odoo
+  ```
 
